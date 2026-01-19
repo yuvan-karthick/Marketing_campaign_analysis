@@ -89,149 +89,241 @@ df_filtered = df[
 ]
 
 # ---------------------------------
-# Title
+# Navigation (Pages)
 # ---------------------------------
-st.title("📊 Retail Marketing Analytics Dashboard")
-st.caption("Interactive dashboard for campaign & customer insights")
-
-# ---------------------------------
-# SECTION 1 — OVERVIEW KPIs
-# ---------------------------------
-st.subheader("🔹 Overview KPIs")
-
-col1, col2, col3, col4 = st.columns(4)
-
-total_customers = df_filtered.shape[0]
-overall_response = round(df_filtered["Response"].mean() * 100, 2)
-avg_spend = round(df_filtered["Total_Spend"].mean(), 2)
-high_spender_pct = round(
-    (df_filtered["Customer_Segment"] == "High Spender").mean() * 100, 2
-)
-
-col1.metric("👥 Total Customers", total_customers)
-col2.metric("📈 Response Rate (%)", overall_response)
-col3.metric("💰 Avg Spend", avg_spend)
-col4.metric("🔥 High Spenders (%)", high_spender_pct)
-
-# ---------------------------------
-# SECTION 2 — SEGMENT PERFORMANCE
-# ---------------------------------
-st.subheader("🔹 Segment Performance")
-
-segment_perf = (
-    df_filtered.groupby("Customer_Segment")
-    .agg(
-        customers=("ID", "count"),
-        avg_spend=("Total_Spend", "mean"),
-        response_rate=("Response", "mean")
-    )
-    .reset_index()
-)
-
-segment_perf["response_rate"] = segment_perf["response_rate"] * 100
-
-col1, col2 = st.columns(2)
-
-with col1:
-    fig = px.bar(
-        segment_perf,
-        x="Customer_Segment",
-        y="response_rate",
-        color="Customer_Segment",
-        title="Response Rate by Segment",
-        labels={"response_rate": "Response Rate (%)"}
-    )
-    fig.update_layout(font=dict(size=18), title_font_size=24)
-    st.plotly_chart(fig, use_container_width=True)
-
-with col2:
-    fig = px.bar(
-        segment_perf,
-        x="Customer_Segment",
-        y="avg_spend",
-        color="Customer_Segment",
-        title="Average Spend by Segment",
-        labels={"avg_spend": "Average Spend"}
-    )
-    fig.update_layout(font=dict(size=18), title_font_size=24)
-    st.plotly_chart(fig, use_container_width=True)
-
-# ---------------------------------
-# SECTION 3 — CAMPAIGN PERFORMANCE
-# ---------------------------------
-st.subheader("🔹 Campaign Performance")
-
-campaign_perf = pd.DataFrame({
-    "Campaign": ["Cmp1", "Cmp2", "Cmp3", "Cmp4", "Cmp5"],
-    "Response Rate (%)": [
-        df_filtered["AcceptedCmp1"].mean() * 100,
-        df_filtered["AcceptedCmp2"].mean() * 100,
-        df_filtered["AcceptedCmp3"].mean() * 100,
-        df_filtered["AcceptedCmp4"].mean() * 100,
-        df_filtered["AcceptedCmp5"].mean() * 100
+page = st.sidebar.radio(
+    "📄 Navigate",
+    [
+        "Segment Performance",
+        "Campaign Performance",
+        "Channel Usage",
+        "Insights & Conclusions"
     ]
-})
-
-fig = px.bar(
-    campaign_perf,
-    x="Campaign",
-    y="Response Rate (%)",
-    color="Campaign",
-    title="Campaign Response Comparison"
 )
 
-fig.update_layout(font=dict(size=18), title_font_size=24)
-
-st.plotly_chart(fig, use_container_width=True)
-
 # ---------------------------------
-# SECTION 4 — CHANNEL BEHAVIOR
+# PAGE 1 — SEGMENT PERFORMANCE
 # ---------------------------------
-st.subheader("🔹 Channel Usage by Segment")
+if page == "Segment Performance":
 
-channel_usage = (
-    df_filtered.groupby("Customer_Segment")
-    .agg(
-        Web=("NumWebPurchases", "mean"),
-        Catalog=("NumCatalogPurchases", "mean"),
-        Store=("NumStorePurchases", "mean")
+    st.title("📊 Segment Performance")
+    st.caption("True engagement & value by customer segment")
+
+    # Create proper engagement variable
+    df_filtered = df_filtered.copy()
+    df_filtered["Any_Response"] = (
+        df_filtered["AcceptedCmp1"] +
+        df_filtered["AcceptedCmp2"] +
+        df_filtered["AcceptedCmp3"] +
+        df_filtered["AcceptedCmp4"] +
+        df_filtered["AcceptedCmp5"]
+    ) > 0
+
+    # Exclude Campaign Responder
+    df_no_campaign = df_filtered[
+        ~df_filtered["Customer_Segment"].isin(["Campaign Responder", "Campaign Responders"])
+    ]
+
+    segment_perf = (
+        df_no_campaign.groupby("Customer_Segment")
+        .agg(
+            customers=("ID", "count"),
+            avg_spend=("Total_Spend", "mean"),
+            response_rate=("Any_Response", "mean")
+        )
+        .reset_index()
     )
-    .reset_index()
-)
 
-fig = px.bar(
-    channel_usage,
-    x="Customer_Segment",
-    y=["Web", "Catalog", "Store"],
-    title="Average Channel Purchases by Segment",
-    barmode="group"
-)
+    segment_perf["response_rate"] *= 100
+    segment_perf = segment_perf.sort_values("response_rate", ascending=False)
 
-fig.update_layout(font=dict(size=18), title_font_size=24)
+    col1, col2 = st.columns(2)
 
-st.plotly_chart(fig, use_container_width=True)
+    with col1:
+        fig = px.bar(
+            segment_perf,
+            x="Customer_Segment",
+            y="response_rate",
+            color="Customer_Segment",
+            title="True Campaign Engagement by Segment",
+            labels={"response_rate": "Engagement Rate (%)"}
+        )
+        fig.update_layout(font=dict(size=18), title_font_size=26)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        fig = px.bar(
+            segment_perf,
+            x="Customer_Segment",
+            y="avg_spend",
+            color="Customer_Segment",
+            title="Average Spend by Segment",
+            labels={"avg_spend": "Average Spend"}
+        )
+        fig.update_layout(font=dict(size=18), title_font_size=26)
+        st.plotly_chart(fig, use_container_width=True)
 
 # ---------------------------------
-# SECTION 5 — UNDER-SERVED SEGMENTS 🔥
+# PAGE 2 — CAMPAIGN PERFORMANCE
 # ---------------------------------
-st.subheader("🔹 Under-Served High Engagement Segments")
+elif page == "Campaign Performance":
 
-underserved = (
-    df_filtered.groupby("Customer_Segment")
-    .agg(
-        customers=("ID", "count"),
-        avg_web_visits=("NumWebVisitsMonth", "mean"),
-        response_rate=("Response", "mean"),
-        avg_spend=("Total_Spend", "mean")
+    st.title("🎯 Campaign Performance")
+    st.caption("Which campaigns performed best")
+
+    campaign_perf = pd.DataFrame({
+        "Campaign": ["Cmp1", "Cmp2", "Cmp3", "Cmp4", "Cmp5"],
+        "Response Rate (%)": [
+            df_filtered["AcceptedCmp1"].mean() * 100,
+            df_filtered["AcceptedCmp2"].mean() * 100,
+            df_filtered["AcceptedCmp3"].mean() * 100,
+            df_filtered["AcceptedCmp4"].mean() * 100,
+            df_filtered["AcceptedCmp5"].mean() * 100
+        ]
+    })
+
+    fig = px.bar(
+        campaign_perf,
+        x="Campaign",
+        y="Response Rate (%)",
+        color="Campaign",
+        title="Campaign Response Comparison"
     )
-    .reset_index()
-)
 
-underserved["response_rate"] = underserved["response_rate"] * 100
+    fig.update_layout(font=dict(size=18), title_font_size=26)
+    st.plotly_chart(fig, use_container_width=True)
 
-underserved = underserved[
-    (underserved["avg_web_visits"] > 5) &
-    (underserved["response_rate"] < 10)
-].sort_values("avg_web_visits", ascending=False)
+# ---------------------------------
+# PAGE 3 — CHANNEL USAGE
+# ---------------------------------
+elif page == "Channel Usage":
 
-st.dataframe(underserved, use_container_width=True)
+    st.title("🛒 Channel Usage by Segment")
+    st.caption("How different segments prefer to purchase")
+
+    channel_usage = (
+        df_filtered.groupby("Customer_Segment")
+        .agg(
+            Web=("NumWebPurchases", "mean"),
+            Catalog=("NumCatalogPurchases", "mean"),
+            Store=("NumStorePurchases", "mean")
+        )
+        .reset_index()
+    )
+
+    fig = px.bar(
+        channel_usage,
+        x="Customer_Segment",
+        y=["Web", "Catalog", "Store"],
+        title="Average Channel Purchases by Segment",
+        barmode="group"
+    )
+
+    fig.update_layout(font=dict(size=18), title_font_size=26)
+    st.plotly_chart(fig, use_container_width=True)
+
+# ---------------------------------
+# PAGE 4 — INSIGHTS & CONCLUSIONS 🔥
+# ---------------------------------
+elif page == "Insights & Conclusions":
+
+    st.title("🚀 Strategic Insights & Conclusions")
+    st.caption("Key business takeaways from the analysis")
+
+    # Recompute segment performance for insights
+    df_filtered = df_filtered.copy()
+    df_filtered["Any_Response"] = (
+        df_filtered["AcceptedCmp1"] +
+        df_filtered["AcceptedCmp2"] +
+        df_filtered["AcceptedCmp3"] +
+        df_filtered["AcceptedCmp4"] +
+        df_filtered["AcceptedCmp5"]
+    ) > 0
+
+    df_no_campaign = df_filtered[
+        ~df_filtered["Customer_Segment"].isin(["Campaign Responder", "Campaign Responders"])
+    ]
+
+    insight_table = (
+        df_no_campaign.groupby("Customer_Segment")
+        .agg(
+            customers=("ID", "count"),
+            avg_spend=("Total_Spend", "mean"),
+            response_rate=("Any_Response", "mean")
+        )
+        .reset_index()
+    )
+
+    insight_table["response_rate"] *= 100
+    insight_table = insight_table.sort_values("response_rate", ascending=False)
+
+    # Small table (underserved)
+    st.subheader("🔹 Under-Served High Engagement Segments")
+
+    underserved = (
+        df_no_campaign.groupby("Customer_Segment")
+        .agg(
+            customers=("ID", "count"),
+            avg_web_visits=("NumWebVisitsMonth", "mean"),
+            response_rate=("Any_Response", "mean"),
+            avg_spend=("Total_Spend", "mean")
+        )
+        .reset_index()
+    )
+
+    underserved["response_rate"] *= 100
+
+    underserved = underserved[
+        (underserved["avg_web_visits"] > 5) &
+        (underserved["response_rate"] < 15)
+    ].sort_values("avg_web_visits", ascending=False)
+
+    st.dataframe(underserved, use_container_width=True)
+
+    # Fun Conclusions 🎉
+    st.subheader("🌟 Key Strategic Conclusions")
+
+    top_segment = insight_table.iloc[0]
+    second_segment = insight_table.iloc[1]
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("""
+        ### 🥇 Most Valuable Segment
+        **{seg}**  
+        💰 Avg Spend: {spend:.2f}  
+        📈 Engagement: {rate:.2f}%  
+        """.format(
+            seg=top_segment["Customer_Segment"],
+            spend=top_segment["avg_spend"],
+            rate=top_segment["response_rate"]
+        ))
+
+    with col2:
+        st.markdown("""
+        ### 🥈 Secondary Growth Segment
+        **{seg}**  
+        💰 Avg Spend: {spend:.2f}  
+        📈 Engagement: {rate:.2f}%  
+        """.format(
+            seg=second_segment["Customer_Segment"],
+            spend=second_segment["avg_spend"],
+            rate=second_segment["response_rate"]
+        ))
+
+    with col3:
+        most_responsive = insight_table.sort_values("response_rate", ascending=False).iloc[0]
+
+        st.markdown("""
+        ### ⚡ Most Responsive Segment
+        **{seg}**  
+        📈 Engagement: {rate:.2f}%  
+        👥 Customers: {cust}  
+        """.format(
+            seg=most_responsive["Customer_Segment"],
+            rate=most_responsive["response_rate"],
+            cust=int(most_responsive["customers"])
+        ))
+
+    st.success("🎯 **Business Recommendation:** Focus primary campaigns on the most valuable & responsive segments, while nurturing under-served high-engagement groups for future growth.")
